@@ -8,7 +8,6 @@ from PIL import Image
 from bisect import bisect, bisect_left
 from copy import deepcopy
 from decord import VideoReader, cpu
-from time import time
 from tqdm import tqdm
 
 from shot_utils import (
@@ -18,9 +17,7 @@ from shot_utils import (
 )
 
 # pseudo dataset parameters
-n_past_shot = 5
 num_sample = 15
-
 NONE_CAM = -1
 
 gap_stats_path = 'tvmce_stats/past_frame_gap_stats.pk'
@@ -113,7 +110,7 @@ def sample_gap(gaps, probs, last_frame):
     return gap
 
 def create_entry(video_name, cur_frame, gap, shot_indices, shot_cams, seg_id, cand_indices,
-                 frame_indices, frame2cam, select_cam, cam_list, boundary, prev_gap=5):
+                 frame_indices, frame2cam, select_cam, cam_list, prev_gap=5):
 
     last_prev_frame = cur_frame - gap
     ind = np.arange(last_prev_frame - prev_gap*(num_sample-1),
@@ -124,7 +121,6 @@ def create_entry(video_name, cur_frame, gap, shot_indices, shot_cams, seg_id, ca
     if not all_frames_available:
         return None, frame_indices
 
-    prev_inds = np.arange(max(0, seg_id-n_past_shot), seg_id)
     frame_indices = frame_indices.union(ind).union(cand_indices)
 
     # sub-sample cameras
@@ -144,11 +140,7 @@ def create_entry(video_name, cur_frame, gap, shot_indices, shot_cams, seg_id, ca
         "outputList": ind.tolist(),
         "outputCam": [frame2cam[frame] for frame in ind.tolist()],
 
-        "prevShotOutputList": [shot_indices[i] for i in prev_inds],
-        "prevShotCamList": [shot_cams[i] for i in prev_inds],
-
         "candidates": cand_indices,
-        "boundary": boundary,
 
         "selectCAM": select_cam,
         "CAMList": cam_list
@@ -267,7 +259,6 @@ if __name__ == '__main__':
             )
             shot_cams.append(curr_cam)
 
-            # boundary case
             gap = sample_gap(gaps, probs, end_prev_shot) if args.gap is None else args.gap
             if gap > 0:
                 entry, frame_indices = create_entry(video_name,
@@ -280,36 +271,10 @@ if __name__ == '__main__':
                                                     frame_indices,
                                                     frame2cam,
                                                     select_cam,
-                                                    cam_list,
-                                                    boundary=1)
+                                                    cam_list)
                 if entry is not None:
                     out_json.append(entry)
 
-            # middle case
-            # TODO: a better way to assign pseudo candidates
-            # currently same as boundary case, using first frame
-            mid_frame = np.random.randint(start_prev_shot, end_prev_shot+1)
-            gap = sample_gap(gaps, probs, mid_frame) if args.gap is None else args.gap
-            if gap > 0:
-                if curr_cam == NONE_CAM:
-                    cand_indices[-1] = mid_frame # put GT at the end
-                else:
-                    cand_indices[cam_list.index(curr_cam)] = mid_frame
-
-                entry, frame_indices = create_entry(video_name,
-                                                    mid_frame,
-                                                    gap,
-                                                    shot_indices,
-                                                    shot_cams,
-                                                    seg_id,
-                                                    cand_indices,
-                                                    frame_indices,
-                                                    frame2cam,
-                                                    curr_cam,
-                                                    cam_list,
-                                                    boundary=0)
-                if entry is not None:
-                    out_json.append(entry)
             shot_indices.append((start_prev_shot + end_prev_shot)//2)
 
         if len(frame_indices) == 0:
