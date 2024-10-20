@@ -1,0 +1,11 @@
+numpy
+tqdm
+tensorflow
+pillow
+ffmpeg_python
+torch
+torchvision
+scikit-learn
+pyYAML
+matplotlib
+timm
